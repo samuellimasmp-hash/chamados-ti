@@ -1,8 +1,22 @@
 # HelpDesk TI — Organização de Chamados
+**Aluno:** Samuel de Lima Feitosa
 
+**Aplicação no Render:** https://chamados-ti-5j87.onrender.com
+
+**Credenciais de teste** (senha de todas: `123456`)
+
+| Perfil | E-mail |
+|---|---|
+| Usuário | usuario@teste.com |
+| Técnico | tecnico@teste.com |
+| Admin | admin@teste.com |
+
+> O plano grátis do Render "dorme" após um tempo parado. O primeiro acesso pode levar cerca de 50 segundos.
+
+---
 Sistema web local para abertura, acompanhamento e organização de chamados de TI, construído no padrão **MVC** com **Node.js, Express, EJS, CSS e Sequelize** (SQLite).
 
-> Sem login: o sistema foi pensado para rodar localmente de forma simples.
+> Autenticação com Firebase (e-mail/senha e Google) e perfis de acesso: **user**, **técnico** e **admin**.
 
 ## Como rodar
 
@@ -23,6 +37,7 @@ Na primeira execução o arquivo `database.sqlite` é criado e populado automati
 - **Ações rápidas**: alterar status, prioridade e responsável com registro automático no histórico.
 - **Comentários** e linha do tempo por chamado.
 - **Técnicos** e **Categorias**: cadastro, edição e remoção.
+- **Login e perfis (RBAC)**: usuário vê só os próprios chamados, técnico assume e altera status, admin gerencia chamados e usuários.
 
 ## Estrutura (MVC)
 
