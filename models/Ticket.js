@@ -46,6 +46,13 @@ const Ticket = sequelize.define(
     resolvidoEm: {
       type: DataTypes.DATE,
     },
+    // ----- Vínculo com o usuário autenticado no Firebase -----
+    autorUid: { type: DataTypes.STRING(128) }, // uid de quem abriu o chamado
+    autorNome: { type: DataTypes.STRING(100) },
+    autorEmail: { type: DataTypes.STRING(120) },
+    // Preenchido quando um técnico ou admin assume/atualiza o chamado
+    tecnicoResponsavel: { type: DataTypes.STRING(100), allowNull: true },
+    tecnicoResponsavelUid: { type: DataTypes.STRING(128), allowNull: true },
     // Número de protocolo amigável (ex.: CH-00042)
     protocolo: {
       type: DataTypes.VIRTUAL,

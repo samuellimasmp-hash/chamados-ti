@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar · HelpDesk TI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/auth.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <h1>HelpDesk TI</h1>
+    <p class="auth-sub" id="auth-sub">Entre para abrir e acompanhar seus chamados.</p>
+
+    <div class="auth-tabs" role="tablist">
+      <button type="button" class="auth-tab" role="tab" id="tab-entrar" aria-selected="true">Entrar</button>
+      <button type="button" class="auth-tab" role="tab" id="tab-criar" aria-selected="false">Criar conta</button>
+    </div>
+
+    <p class="auth-error" id="auth-error" role="alert" hidden></p>
+
+    <form id="auth-form" novalidate>
+      <label class="auth-field" id="campo-nome" hidden>
+        <span>Nome</span>
+        <input type="text" id="nome" autocomplete="name" placeholder="Seu nome completo">
+      </label>
+      <label class="auth-field">
+        <span>E-mail</span>
+        <input type="email" id="email" autocomplete="email" placeholder="voce@empresa.com" required>
+      </label>
+      <label class="auth-field">
+        <span>Senha</span>
+        <input type="password" id="senha" autocomplete="current-password" placeholder="Mínimo de 6 caracteres" required>
+      </label>
+      <button type="submit" class="auth-btn auth-btn-primary" id="btn-enviar">Entrar</button>
+    </form>
+
+    <div class="auth-divider">ou</div>
+    <button type="button" class="auth-btn auth-btn-google" id="btn-google">Entrar com Google</button>
+  </main>
+
+  <script type="module">
+    import { firebaseConfig } from '/js/firebase-config.js';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import {
+      getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+      updateProfile, signInWithPopup, GoogleAuthProvider, signOut,
+    } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    signOut(auth).catch(() => {}); // limpa login antigo do navegador; a sessão real fica no servidor
+
+    const $ = (id) => document.getElementById(id);
+    const form = $('auth-form');
+    const erroBox = $('auth-error');
+    let modoCriar = false;
+
+    const MENSAGENS = {
+      'auth/invalid-credential': 'E-mail ou senha incorretos.',
+      'auth/wrong-password': 'E-mail ou senha incorretos.',
+      'auth/user-not-found': 'E-mail ou senha incorretos.',
+      'auth/invalid-email': 'Digite um e-mail válido.',
+      'auth/email-already-in-use': 'Este e-mail já está cadastrado. Use a aba Entrar.',
+      'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+      'auth/missing-password': 'Digite a senha.',
+      'auth/popup-closed-by-user': 'A janela do Google foi fechada antes de concluir o login.',
+      'auth/cancelled-popup-request': 'A janela do Google foi fechada antes de concluir o login.',
+      'auth/popup-blocked': 'O navegador bloqueou a janela do Google. Libere os pop-ups e tente de novo.',
+      'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+      'auth/network-request-failed': 'Sem conexão com o Firebase. Verifique sua internet.',
+      'auth/unauthorized-domain': 'Este endereço não está autorizado no Firebase (Authentication > Settings > Authorized domains).',
+      'auth/operation-not-allowed': 'Este método de login não está ativado no Firebase.',
+    };
+
+    function mostrarErro(texto) {
+      erroBox.textContent = texto;
+      erroBox.hidden = !texto;
+    }
+
+    function setModo(criar) {
+      modoCriar = criar;
+      $('tab-entrar').setAttribute('aria-selected', String(!criar));
+      $('tab-criar').setAttribute('aria-selected', String(criar));
+      $('campo-nome').hidden = !criar;
+      $('btn-enviar').textContent = criar ? 'Criar conta' : 'Entrar';
+      $('senha').autocomplete = criar ? 'new-password' : 'current-password';
+      $('auth-sub').textContent = criar
+        ? 'Crie sua conta para abrir chamados de TI.'
+        : 'Entre para abrir e acompanhar seus chamados.';
+      mostrarErro('');
+    }
+    $('tab-entrar').addEventListener('click', () => setModo(false));
+    $('tab-criar').addEventListener('click', () => setModo(true));
+
+    function ocupado(sim) {
+      document.querySelectorAll('.auth-btn').forEach((b) => (b.disabled = sim));
+    }
+
+    // Entrega o token ao servidor, que confere o usuário, grava em "usuarios" e abre a sessão.
+    async function concluir(user, nome) {
+      const idToken = await user.getIdToken(true);
+      const resposta = await fetch('/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, nome }),
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => ({}));
+        throw new Error(dados.erro || 'Não foi possível entrar. Tente novamente.');
+      }
+      window.location.href = '/';
+    }
+
+    function tratar(err) {
+      console.error(err);
+      mostrarErro(MENSAGENS[err.code] || err.message || 'Algo deu errado. Tente novamente.');
+      ocupado(false);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mostrarErro('');
+      const email = $('email').value.trim();
+      const senha = $('senha').value;
+      const nome = $('nome').value.trim();
+      if (!email || !senha) return mostrarErro('Preencha e-mail e senha.');
+      if (modoCriar && !nome) return mostrarErro('Digite o seu nome.');
+
+      ocupado(true);
+      try {
+        if (modoCriar) {
+          const cred = await createUserWithEmailAndPassword(auth, email, senha);
+          await updateProfile(cred.user, { displayName: nome });
+          await concluir(cred.user, nome);
+        } else {
+          const cred = await signInWithEmailAndPassword(auth, email, senha);
+          await concluir(cred.user, '');
+        }
+      } catch (err) {
+        tratar(err);
+      }
+    });
+
+    $('btn-google').addEventListener('click', async () => {
+      mostrarErro('');
+      ocupado(true);
+      try {
+        const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+        await concluir(cred.user, cred.user.displayName || '');
+      } catch (err) {
+        tratar(err);
+      }
+    });
+  </script>
+</body>
+</html>

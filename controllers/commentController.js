@@ -4,12 +4,13 @@ const { validationMessages } = require('../utils/helpers');
 // POST /tickets/:id/comments
 exports.create = async (req, res) => {
   const ticket = await Ticket.findByPk(req.params.id);
-  if (!ticket) return res.status(404).render('404', { title: 'Chamado não encontrado' });
+  const permitido = ticket && (req.user.perfil !== 'user' || ticket.autorUid === req.user.uid);
+  if (!permitido) return res.status(404).render('404', { title: 'Chamado não encontrado' });
 
   try {
     await Comment.create({
       ticketId: ticket.id,
-      autor: (req.body.autor || '').trim(),
+      autor: req.user.nome, // o autor é sempre o usuário logado
       mensagem: (req.body.mensagem || '').trim(),
       tipo: 'comentario',
     });

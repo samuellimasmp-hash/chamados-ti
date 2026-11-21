@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() {
+      return request.auth != null;
+    }
+
+    function ehAdmin() {
+      return logado()
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'admin';
+    }
+
+    // Cada pessoa lê só o próprio documento; admin lê todos.
+    // Só o admin pode alterar o campo "perfil".
+    match /usuarios/{uid} {
+      allow read: if logado() && (request.auth.uid == uid || ehAdmin());
+      allow create: if logado() && request.auth.uid == uid && request.resource.data.perfil == 'user';
+      allow update: if ehAdmin();
+      allow delete: if false;
+    }
+
+    // Qualquer outra coleção: bloqueada para acesso direto do navegador.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

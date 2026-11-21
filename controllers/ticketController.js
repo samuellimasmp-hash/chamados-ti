@@ -31,9 +31,14 @@ async function formOptions() {
   return { categorias, tecnicos };
 }
 
-async function findOr404(id, res, opts = {}) {
-  const ticket = await Ticket.findByPk(id, opts);
-  if (!ticket) res.status(404).render('404', { title: 'Chamado não encontrado' });
+// Busca o chamado respeitando o perfil: usuário comum só enxerga os próprios chamados.
+async function findOr404(req, res, opts = {}) {
+  const ticket = await Ticket.findByPk(req.params.id, opts);
+  const permitido = ticket && (req.user.perfil !== 'user' || ticket.autorUid === req.user.uid);
+  if (!permitido) {
+    res.status(404).render('404', { title: 'Chamado não encontrado' });
+    return null;
+  }
   return ticket;
 }
 
@@ -41,6 +46,9 @@ async function findOr404(id, res, opts = {}) {
 exports.index = async (req, res) => {
   const { q, status, prioridade, categoria, tecnico } = req.query;
   const where = {};
+
+  // Usuário comum: apenas os chamados abertos por ele (autorUid == user.uid)
+  if (req.user.perfil === 'user') where.autorUid = req.user.uid;
 
   if (q) {
     const like = { [Op.like]: `%${q}%` };
@@ -60,7 +68,7 @@ exports.index = async (req, res) => {
   const opts = await formOptions();
 
   res.render('tickets/index', {
-    title: 'Chamados',
+    title: req.user.perfil === 'user' ? 'Meus chamados' : 'Chamados',
     tickets,
     filtros: { q: q || '', status: status || '', prioridade: prioridade || '', categoria: categoria || '', tecnico: tecnico || '' },
     ...opts,
@@ -71,7 +79,12 @@ exports.index = async (req, res) => {
 exports.new = async (req, res) => {
   res.render('tickets/form', {
     title: 'Novo chamado',
-    ticket: { prioridade: 'media', status: 'aberto' },
+    ticket: {
+      prioridade: 'media',
+      status: 'aberto',
+      solicitante: req.user.nome,
+      emailSolicitante: req.user.email,
+    },
     errors: [],
     isEdit: false,
     ...(await formOptions()),
@@ -80,7 +93,24 @@ exports.new = async (req, res) => {
 
 // POST /tickets
 exports.create = async (req, res) => {
-  const data = pickTicket(req.body);
+  const user = req.user;
+  const data = {
+    ...pickTicket(req.body),
+    status: 'aberto',
+    autorUid: user.uid,
+    autorNome: user.nome,
+    autorEmail: user.email,
+    tecnicoResponsavel: null,
+    tecnicoResponsavelUid: null,
+  };
+  if (user.perfil === 'user') {
+    // Usuário comum não define técnico nem status; o solicitante é ele mesmo.
+    data.technicianId = null;
+    data.solicitante = user.nome;
+    data.emailSolicitante = user.email || null;
+  }
+  if (!data.solicitante) data.solicitante = user.nome;
+
   try {
     const ticket = await Ticket.create(data);
     await Comment.create({
@@ -105,7 +135,7 @@ exports.create = async (req, res) => {
 
 // GET /tickets/:id
 exports.show = async (req, res) => {
-  const ticket = await findOr404(req.params.id, res, {
+  const ticket = await findOr404(req, res, {
     include: [...include, { model: Comment, as: 'comentarios' }],
     order: [[{ model: Comment, as: 'comentarios' }, 'createdAt', 'ASC']],
   });
@@ -114,9 +144,9 @@ exports.show = async (req, res) => {
   res.render('tickets/show', { title: ticket.protocolo, ticket, tecnicos, errors: [] });
 };
 
-// GET /tickets/:id/edit
+// GET /tickets/:id/edit (somente admin)
 exports.edit = async (req, res) => {
-  const ticket = await findOr404(req.params.id, res);
+  const ticket = await findOr404(req, res);
   if (!ticket) return;
   res.render('tickets/form', {
     title: `Editar ${ticket.protocolo}`,
@@ -127,9 +157,9 @@ exports.edit = async (req, res) => {
   });
 };
 
-// PUT /tickets/:id
+// PUT /tickets/:id (somente admin)
 exports.update = async (req, res) => {
-  const ticket = await findOr404(req.params.id, res);
+  const ticket = await findOr404(req, res);
   if (!ticket) return;
   const data = pickTicket(req.body);
   try {
@@ -148,9 +178,9 @@ exports.update = async (req, res) => {
   }
 };
 
-// PATCH /tickets/:id/quick — atualização rápida (status, prioridade, técnico) com histórico
+// PATCH /tickets/:id/quick — atualização rápida (técnico ou admin), com histórico
 exports.quickUpdate = async (req, res) => {
-  const ticket = await findOr404(req.params.id, res, { include });
+  const ticket = await findOr404(req, res, { include });
   if (!ticket) return;
 
   const historico = [];
@@ -175,6 +205,13 @@ exports.quickUpdate = async (req, res) => {
     return res.redirect(`/tickets/${ticket.id}?erro=${encodeURIComponent('Nenhuma alteração realizada.')}`);
   }
 
+  // Quem atualiza um chamado sem responsável passa a ser o responsável.
+  if (!ticket.tecnicoResponsavelUid) {
+    ticket.tecnicoResponsavel = req.user.nome;
+    ticket.tecnicoResponsavelUid = req.user.uid;
+    historico.push(`Chamado assumido por ${req.user.nome}.`);
+  }
+
   await ticket.save();
   await Comment.bulkCreate(
     historico.map((mensagem) => ({ ticketId: ticket.id, autor: 'Sistema', tipo: 'sistema', mensagem }))
@@ -182,9 +219,29 @@ exports.quickUpdate = async (req, res) => {
   res.redirect(`/tickets/${ticket.id}?msg=${encodeURIComponent('Chamado atualizado.')}`);
 };
 
-// DELETE /tickets/:id
+// POST /tickets/:id/assume — técnico ou admin assume o chamado
+exports.assume = async (req, res) => {
+  const ticket = await findOr404(req, res);
+  if (!ticket) return;
+
+  const historico = [`Chamado assumido por ${req.user.nome}.`];
+  ticket.tecnicoResponsavel = req.user.nome;
+  ticket.tecnicoResponsavelUid = req.user.uid;
+  if (ticket.status === 'aberto') {
+    ticket.status = 'em_andamento';
+    historico.push('Status alterado de "Aberto" para "Em andamento".');
+  }
+
+  await ticket.save();
+  await Comment.bulkCreate(
+    historico.map((mensagem) => ({ ticketId: ticket.id, autor: 'Sistema', tipo: 'sistema', mensagem }))
+  );
+  res.redirect(`/tickets/${ticket.id}?msg=${encodeURIComponent('Você assumiu este chamado.')}`);
+};
+
+// DELETE /tickets/:id (somente admin)
 exports.destroy = async (req, res) => {
-  const ticket = await findOr404(req.params.id, res);
+  const ticket = await findOr404(req, res);
   if (!ticket) return;
   const protocolo = ticket.protocolo;
   await ticket.destroy();

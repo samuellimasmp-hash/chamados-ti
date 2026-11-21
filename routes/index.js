@@ -4,37 +4,50 @@ const tickets = require('../controllers/ticketController');
 const comments = require('../controllers/commentController');
 const technicians = require('../controllers/technicianController');
 const categories = require('../controllers/categoryController');
+const admin = require('../controllers/adminController');
+const { requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// Dashboard
-router.get('/', dashboard.index);
+const tecnicoOuAdmin = requireRole('tecnico', 'admin');
+const soAdmin = requireRole('admin');
+
+// Dashboard (usuário comum vai direto para os próprios chamados)
+router.get('/', (req, res, next) => {
+  if (req.user.perfil === 'user') return res.redirect('/tickets');
+  return dashboard.index(req, res, next);
+});
 
 // Chamados
 router.get('/tickets', tickets.index);
 router.get('/tickets/new', tickets.new);
 router.post('/tickets', tickets.create);
 router.get('/tickets/:id', tickets.show);
-router.get('/tickets/:id/edit', tickets.edit);
-router.put('/tickets/:id', tickets.update);
-router.patch('/tickets/:id/quick', tickets.quickUpdate);
-router.delete('/tickets/:id', tickets.destroy);
+router.get('/tickets/:id/edit', soAdmin, tickets.edit);
+router.put('/tickets/:id', soAdmin, tickets.update);
+router.patch('/tickets/:id/quick', tecnicoOuAdmin, tickets.quickUpdate);
+router.post('/tickets/:id/assume', tecnicoOuAdmin, tickets.assume);
+router.delete('/tickets/:id', soAdmin, tickets.destroy);
 router.post('/tickets/:id/comments', comments.create);
 
-// Técnicos
-router.get('/technicians', technicians.index);
-router.get('/technicians/new', technicians.new);
-router.post('/technicians', technicians.create);
-router.get('/technicians/:id/edit', technicians.edit);
-router.put('/technicians/:id', technicians.update);
-router.delete('/technicians/:id', technicians.destroy);
+// Técnicos (somente admin)
+router.get('/technicians', soAdmin, technicians.index);
+router.get('/technicians/new', soAdmin, technicians.new);
+router.post('/technicians', soAdmin, technicians.create);
+router.get('/technicians/:id/edit', soAdmin, technicians.edit);
+router.put('/technicians/:id', soAdmin, technicians.update);
+router.delete('/technicians/:id', soAdmin, technicians.destroy);
 
-// Categorias
-router.get('/categories', categories.index);
-router.get('/categories/new', categories.new);
-router.post('/categories', categories.create);
-router.get('/categories/:id/edit', categories.edit);
-router.put('/categories/:id', categories.update);
-router.delete('/categories/:id', categories.destroy);
+// Categorias (somente admin)
+router.get('/categories', soAdmin, categories.index);
+router.get('/categories/new', soAdmin, categories.new);
+router.post('/categories', soAdmin, categories.create);
+router.get('/categories/:id/edit', soAdmin, categories.edit);
+router.put('/categories/:id', soAdmin, categories.update);
+router.delete('/categories/:id', soAdmin, categories.destroy);
+
+// Gestão de usuários (somente admin)
+router.get('/admin/users', soAdmin, admin.users);
+router.post('/admin/users/:uid/perfil', soAdmin, admin.updatePerfil);
 
 module.exports = router;

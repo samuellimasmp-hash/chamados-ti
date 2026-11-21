@@ -29,4 +29,11 @@ const SETORES = [
   'TI',
 ];
 
-module.exports = { STATUS, STATUS_ATIVOS, PRIORIDADES, SETORES };
+// Perfis de acesso (RBAC). A chave é o valor salvo no campo "perfil" do Firestore.
+const PERFIS = {
+  user: { label: 'Usuário' },
+  tecnico: { label: 'Técnico / Analista de TI' },
+  admin: { label: 'Administrador' },
+};
+
+module.exports = { STATUS, STATUS_ATIVOS, PRIORIDADES, SETORES, PERFIS };

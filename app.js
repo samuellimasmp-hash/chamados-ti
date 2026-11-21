@@ -3,7 +3,9 @@ const express = require('express');
 const methodOverride = require('method-override');
 const { sequelize } = require('./models');
 const routes = require('./routes');
+const authRoutes = require('./routes/auth');
 const locals = require('./middlewares/locals');
+const { attachUser, requireAuth } = require('./middlewares/auth');
 const seed = require('./seeders/seed');
 
 const app = express();
@@ -14,12 +16,18 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Middlewares
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method')); // permite PUT/PATCH/DELETE via formulários (?_method=PUT)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(attachUser); // lê o cookie de sessão e carrega o usuário + perfil
 app.use(locals);
 
-// Rotas
+// Rotas públicas (login, sessão, logout)
+app.use(authRoutes);
+
+// Tudo abaixo exige login
+app.use(requireAuth);
 app.use(routes);
 
 // 404

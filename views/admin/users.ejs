@@ -1,0 +1,47 @@
+<%- include('../partials/header') %>
+
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Administração</p>
+    <h1>Gestão de usuários</h1>
+    <p class="subtitle"><%= usuarios.length %> <%= usuarios.length === 1 ? 'usuário cadastrado' : 'usuários cadastrados' %></p>
+  </div>
+</header>
+
+<section class="card card-flush">
+  <div class="table-wrap">
+    <table class="users-table">
+      <thead>
+        <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th></th></tr>
+      </thead>
+      <tbody>
+        <% usuarios.forEach(function (u) { %>
+          <tr>
+            <td><strong><%= u.nome %></strong><% if (u.uid === currentUser.uid) { %> <span class="muted">(você)</span><% } %></td>
+            <td><%= u.email %></td>
+            <% if (u.uid === currentUser.uid) { %>
+              <td><span class="perfil-tag perfil-<%= u.perfil %>"><%= (PERFIS[u.perfil] || PERFIS.user).label %></span></td>
+              <td></td>
+            <% } else { %>
+              <td colspan="2">
+                <form method="POST" action="/admin/users/<%= u.uid %>/perfil" class="perfil-form">
+                  <select name="perfil" aria-label="Perfil de <%= u.nome %>">
+                    <% Object.keys(PERFIS).forEach(function (p) { %>
+                      <option value="<%= p %>" <%= u.perfil === p ? 'selected' : '' %>><%= PERFIS[p].label %></option>
+                    <% }) %>
+                  </select>
+                  <button type="submit" class="btn btn-secondary">Salvar</button>
+                </form>
+              </td>
+            <% } %>
+          </tr>
+        <% }) %>
+        <% if (!usuarios.length) { %>
+          <tr><td colspan="4" class="muted">Nenhum usuário cadastrado ainda.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include('../partials/footer') %>

@@ -1,8 +1,10 @@
 <%- include('../partials/header') %>
+<% const perfil = currentUser.perfil; %>
+<% const equipe = perfil === 'tecnico' || perfil === 'admin'; %>
 
 <header class="page-header">
   <div>
-    <a href="/tickets" class="back-link"><%- icon('back', 16) %> Chamados</a>
+    <a href="/tickets" class="back-link"><%- icon('back', 16) %> <%= perfil === 'user' ? 'Meus chamados' : 'Chamados' %></a>
     <div class="title-line">
       <span class="ticket-code lg"><%= ticket.protocolo %></span>
       <span class="status status-<%= STATUS[ticket.status].cor %>"><%= STATUS[ticket.status].label %></span>
@@ -12,10 +14,17 @@
     <p class="subtitle">Aberto <%= timeAgo(ticket.createdAt) %> por <strong><%= ticket.solicitante %></strong></p>
   </div>
   <div class="header-actions">
-    <a href="/tickets/<%= ticket.id %>/edit" class="btn btn-secondary" id="ticket-edit"><%- icon('edit', 16) %> Editar</a>
-    <form method="POST" action="/tickets/<%= ticket.id %>?_method=DELETE" data-confirm="Excluir definitivamente o chamado <%= ticket.protocolo %>?">
-      <button type="submit" class="btn btn-danger" id="ticket-delete"><%- icon('trash', 16) %> Excluir</button>
-    </form>
+    <% if (equipe) { %>
+      <form method="POST" action="/tickets/<%= ticket.id %>/assume">
+        <button type="submit" class="btn btn-primary" id="ticket-assume"><%- icon('check', 16) %> Assumir chamado</button>
+      </form>
+    <% } %>
+    <% if (perfil === 'admin') { %>
+      <a href="/tickets/<%= ticket.id %>/edit" class="btn btn-secondary" id="ticket-edit"><%- icon('edit', 16) %> Editar</a>
+      <form method="POST" action="/tickets/<%= ticket.id %>?_method=DELETE" data-confirm="Excluir definitivamente o chamado <%= ticket.protocolo %>?">
+        <button type="submit" class="btn btn-danger" id="ticket-delete"><%- icon('trash', 16) %> Excluir</button>
+      </form>
+    <% } %>
   </div>
 </header>
 
@@ -49,16 +58,9 @@
       </ol>
 
       <form method="POST" action="/tickets/<%= ticket.id %>/comments" class="comment-form" id="comment-form">
+        <p class="muted">Comentando como <strong><%= currentUser.nome %></strong></p>
         <div class="field">
-          <label for="autor">Seu nome</label>
-          <input type="text" id="autor" name="autor" placeholder="Ex.: Ana Souza" required list="autores">
-          <datalist id="autores">
-            <% tecnicos.forEach(function (t) { %><option value="<%= t.nome %>"><% }) %>
-            <option value="<%= ticket.solicitante %>">
-          </datalist>
-        </div>
-        <div class="field">
-          <label for="mensagem">Comentário</label>
+          <label for="mensagem"><%= equipe ? 'Parecer técnico / comentário' : 'Comentário' %></label>
           <textarea id="mensagem" name="mensagem" rows="3" placeholder="Escreva uma atualização, solução aplicada ou dúvida…" required></textarea>
         </div>
         <button type="submit" class="btn btn-primary" id="comment-submit"><%- icon('message', 16) %> Comentar</button>
@@ -67,6 +69,7 @@
   </div>
 
   <aside class="detail-side">
+    <% if (equipe) { %>
     <section class="card">
       <h2 class="form-section"><%- icon('zap') %> Ações rápidas</h2>
       <form method="POST" action="/tickets/<%= ticket.id %>/quick?_method=PATCH" id="quick-form">
@@ -101,6 +104,7 @@
         <button type="submit" class="btn btn-primary btn-block" id="quick-submit"><%- icon('check', 16) %> Atualizar</button>
       </form>
     </section>
+    <% } %>
 
     <section class="card">
       <h2 class="form-section"><%- icon('ticket') %> Informações</h2>
@@ -108,12 +112,15 @@
         <div><dt>Categoria</dt><dd>
           <% if (ticket.categoria) { %><span class="chip"><span class="dot" style="background: <%= ticket.categoria.cor %>"></span><%= ticket.categoria.nome %></span><% } else { %>—<% } %>
         </dd></div>
-        <div><dt>Responsável</dt><dd>
+        <div><dt>Técnico responsável</dt><dd>
+          <% if (ticket.tecnicoResponsavel) { %><span class="person"><span class="avatar avatar-sm"><%= ticket.tecnicoResponsavel.split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase() %></span><%= ticket.tecnicoResponsavel %></span><% } else { %><span class="muted">Ninguém assumiu ainda</span><% } %>
+        </dd></div>
+        <div><dt>Equipe (cadastro)</dt><dd>
           <% if (ticket.tecnico) { %><span class="person"><span class="avatar avatar-sm"><%= ticket.tecnico.iniciais %></span><%= ticket.tecnico.nome %></span><% } else { %><span class="muted">Não atribuído</span><% } %>
         </dd></div>
         <div><dt><%- icon('user', 14) %> Solicitante</dt><dd><%= ticket.solicitante %></dd></div>
-        <% if (ticket.emailSolicitante) { %>
-          <div><dt><%- icon('mail', 14) %> E-mail</dt><dd><a href="mailto:<%= ticket.emailSolicitante %>"><%= ticket.emailSolicitante %></a></dd></div>
+        <% if (ticket.autorEmail || ticket.emailSolicitante) { %>
+          <div><dt><%- icon('mail', 14) %> E-mail</dt><dd><a href="mailto:<%= ticket.autorEmail || ticket.emailSolicitante %>"><%= ticket.autorEmail || ticket.emailSolicitante %></a></dd></div>
         <% } %>
         <div><dt><%- icon('building', 14) %> Setor</dt><dd><%= ticket.setor || '—' %></dd></div>
         <div><dt>Aberto em</dt><dd><%= formatDate(ticket.createdAt) %></dd></div>
